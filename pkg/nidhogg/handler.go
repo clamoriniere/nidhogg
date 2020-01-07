@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -31,8 +32,9 @@ type HandlerConfig struct {
 
 //Daemonset contains the name and namespace of a Daemonset
 type Daemonset struct {
-	Name      string `json:"name" yaml:"name"`
-	Namespace string `json:"namespace" yaml:"namespace"`
+	Name      string                `json:"name" yaml:"name"`
+	Selector  *metav1.LabelSelector `json:"labelSelector,omitempty" yaml:"labelSelector,omitempty"`
+	Namespace string                `json:"namespace" yaml:"namespace"`
 }
 
 type taintChanges struct {
@@ -121,6 +123,16 @@ func (h *Handler) getDaemonsetPod(nodeName string, ds Daemonset) (*corev1.Pod, e
 				if pod.Spec.NodeName == nodeName {
 					return &pod, nil
 				}
+			}
+		}
+
+		if ds.Selector != nil {
+			var selector labels.Selector
+			if selector, err = metav1.LabelSelectorAsSelector(ds.Selector); err != nil {
+				return nil, fmt.Errorf("unable to parse daemonset.labelSelector, daemonset.name=%s, err:%v", ds.Name, err)
+			}
+			if selector.Matches(labels.Set(pod.Labels)) {
+				return &pod, nil
 			}
 		}
 	}
